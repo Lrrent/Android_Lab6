@@ -41,18 +41,22 @@ public class MainActivity extends AppCompatActivity {
     private TextView music_time,total_time;
     private ObjectAnimator animator;
     private int flag = 0;
+    private IBinder iBinder;
     //test
     private IBinder mbinder = null;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        musicService  = new MusicService();
         findAllView();   //绑定控件
         play.setOnClickListener(new MyButton());
         stop.setOnClickListener(new MyButton());
         quit.setOnClickListener(new MyButton());
         connection();
         setAnimator();  //设置并开启动画
+        //SimpleDateFormat time = new SimpleDateFormat("mm:ss");  //定义时间格式
+        //total_time.setText(time.format(PlayerGetDuration_Position(103))); //将音乐长度格式化为时间并显示在total_time中
         //runnable这个线程会在handler所在线程执行,也就是UI线程
         //Log.i("connetct success", "onServiceConnected: ");
     }
@@ -67,12 +71,6 @@ public class MainActivity extends AppCompatActivity {
         seekbar = (SeekBar) findViewById(R.id.seekbar);
         imag_rotate = AnimationUtils.loadAnimation(MainActivity.this,R.anim.rotate); //加载动画,xml方式实现
     }
-    public void startRotate(ImageView img){ //图片旋转函数
-        img.startAnimation(imag_rotate);
-        //http://bbs.csdn.net/topics/391884642
-        //一开始的旋转动画速度先慢中间速度快最后又慢速,这是因为默认为这样,只要给动画加个均匀插值器即可
-        imag_rotate.setInterpolator(new LinearInterpolator());
-    }
     public void stopRotate(){ //停止旋转动画
         music_img.clearAnimation();
     }
@@ -81,30 +79,47 @@ public class MainActivity extends AppCompatActivity {
         public void onClick(View v) {
             switch (v.getId()){
                 case R.id.play:
-                    musicService.playOrPause();
                     handler.post(runnable);
+                    PlayerStart_Stop(101);
                     if(flag==1) {animator.pause();status.setText("Pause"); play.setText("Play");flag=0;;}
                     else{animator.resume();status.setText("Playing");play.setText("Pause");flag = 1;}
                     break;
-                case R.id.stop: //stopRotate();
-                    animator.end(); musicService.stop();
-                    //stop(); //新增
+                case R.id.stop:animator.end();PlayerStart_Stop(102); //新增
                     status.setText("Stopped");flag=0;play.setText("Play");setAnimator(); break;
                 case R.id.quit: MainActivity.this.finish();unbindService(sc);System.exit(0);break;//退出程序要解绑服务
             }
         }
     }
-    /*
-    private void stop(){ //测试ontransact
-        int code = 102;
+    private void PlayerStart_Stop(int code){ //控制音乐播放或停止 101为播放 102为停止
         Parcel data = Parcel.obtain();
         Parcel reply = Parcel.obtain();
         try{
-            mbinder.transact(code,data,reply,0);
+            iBinder.transact(code,data,reply,0);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
-    }*/
+    }
+    private int PlayerGetDuration_Position(int code){ //获得音乐的时长以及当前播放时间 103 为时长 104为当前时间
+        Parcel data = Parcel.obtain();
+        Parcel reply = Parcel.obtain();
+        try{
+            iBinder.transact(code,data,reply,0);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        return reply.readInt();
+    }
+    private void PlayerSeek(int position){ //设置播放器从给定时间点的音乐位置播放
+        int code = 105;
+        Parcel data = Parcel.obtain();
+        data.writeInt(position);
+        Parcel reply = Parcel.obtain();
+        try{
+            iBinder.transact(code,data,reply,0);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
     private void connection(){
         Intent intent = new Intent(this,MusicService.class);
         bindService(intent,sc, Context.BIND_AUTO_CREATE);
@@ -112,7 +127,8 @@ public class MainActivity extends AppCompatActivity {
     public ServiceConnection sc = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            musicService = ((MusicService.MyBinder)(service)).getService();
+           // musicService = ((MusicService.MyBinder)(service)).getService();
+            iBinder = service;
         }
         @Override
         public void onServiceDisconnected(ComponentName name) {
@@ -125,15 +141,15 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             //Log.i("Running", "run: ");
             SimpleDateFormat time = new SimpleDateFormat("mm:ss");  //定义时间格式
-            total_time.setText(time.format(musicService.mediaPlayer.getDuration())); //将音乐长度格式化为时间并显示在total_time中
-            music_time.setText(time.format(musicService.mediaPlayer.getCurrentPosition()));  //获得当前播放进度,并格式化为时间格式
-            seekbar.setMax(musicService.mediaPlayer.getDuration());  //设置进度条最大数值
-            seekbar.setProgress(musicService.mediaPlayer.getCurrentPosition());//设置进度条当前进度为音乐当前播放的位置
+            total_time.setText(time.format(PlayerGetDuration_Position(103)));
+            music_time.setText(time.format(PlayerGetDuration_Position(104)));  //获得当前播放进度,并格式化为时间格式
+            seekbar.setMax(PlayerGetDuration_Position(103));  //设置进度条最大数值
+            seekbar.setProgress(PlayerGetDuration_Position(104));//设置进度条当前进度为音乐当前播放的位置
             seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {   //实现改变拖动条后设置当前音乐播放进度为相应时间
                 @Override
                 public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                     if (fromUser) {
-                        musicService.mediaPlayer.seekTo(seekBar.getProgress()); //将当前音频播放位置设置为进度条的进度
+                        PlayerSeek(seekbar.getProgress()); //将当前音频播放位置设置为进度条的进度
                     }
                 }
                 @Override
@@ -143,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
                 public void onStopTrackingTouch(SeekBar seekBar) {
                 }
             });
-            handler.postDelayed(runnable, 1000);
+            handler.postDelayed(runnable, 100);
         }
 
     };

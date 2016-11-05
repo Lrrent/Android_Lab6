@@ -13,7 +13,7 @@ import android.view.animation.RotateAnimation;
 import java.io.IOException;
 
 public class MusicService extends Service {
-    public  MediaPlayer mediaPlayer = new MediaPlayer();
+    private   MediaPlayer mediaPlayer = new MediaPlayer();
     public final IBinder binder = new MyBinder();
     public class MyBinder extends Binder{
         /*使用ontransact函数可以避免mediaplayer被其他类访问的情况,即可以将这些函数设置为private*/
@@ -22,6 +22,9 @@ public class MusicService extends Service {
             switch(code){
                 case 101:playOrPause();break;
                 case 102:stop();break;
+                case 103:reply.writeInt(mediaPlayer.getDuration());break;
+                case 104:reply.writeInt(mediaPlayer.getCurrentPosition());break;
+                case 105:mediaPlayer.seekTo(data.readInt());break;
             }
             return super.onTransact(code, data, reply, flags);
         }
@@ -47,11 +50,11 @@ public class MusicService extends Service {
             e.printStackTrace();
         }
     }
-    public void playOrPause(){
+    private void playOrPause(){
         if (mediaPlayer.isPlaying()) mediaPlayer.pause();
         else mediaPlayer.start();
     }
-    public void stop(){
+    private void stop(){
         if (mediaPlayer != null){
             mediaPlayer.stop();
             //刚开始的写法为停止后直接prepare然后seekto(0),但是会出现点击停止按钮后依然后播放一小段才能够完全停止的状况,然后改为以下的方法
@@ -60,6 +63,7 @@ public class MusicService extends Service {
                 mediaPlayer.reset();
                 mediaPlayer.setDataSource("/data/K.Will-Melt.mp3");
                 mediaPlayer.prepare();
+                mediaPlayer.setLooping(true);
             } catch (IOException e) {
                 e.printStackTrace();
             }
